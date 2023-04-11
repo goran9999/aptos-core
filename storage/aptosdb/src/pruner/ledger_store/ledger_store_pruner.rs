@@ -18,6 +18,7 @@ use crate::{
     EventStore, TransactionStore,
 };
 use anyhow::Result;
+use aptos_logger::info;
 use aptos_types::transaction::{AtomicVersion, Version};
 use std::{
     cmp::min,
@@ -66,10 +67,6 @@ impl DBPruner for LedgerPruner {
         Ok(target_version)
     }
 
-    fn initialize_min_readable_version(&self) -> Result<Version> {
-        self.ledger_metadata_pruner.progress()
-    }
-
     fn progress(&self) -> Version {
         self.progress.load(Ordering::SeqCst)
     }
@@ -95,6 +92,8 @@ impl DBPruner for LedgerPruner {
 
 impl LedgerPruner {
     pub fn new(ledger_db: Arc<LedgerDb>) -> Result<Self> {
+        info!(name = LEDGER_PRUNER_NAME, "Initializing...");
+
         let ledger_metadata_pruner = Box::new(
             LedgerMetadataPruner::new(ledger_db.metadata_db_arc())
                 .expect("Failed to initialize ledger_metadata_pruner."),
@@ -143,7 +142,11 @@ impl LedgerPruner {
             ],
         };
 
-        pruner.initialize();
+        info!(
+            name = pruner.name(),
+            progress = metadata_progress,
+            "Initialized."
+        );
 
         Ok(pruner)
     }

@@ -13,9 +13,11 @@ use crate::{
 use anyhow::Result;
 use aptos_infallible::Mutex;
 use aptos_jellyfish_merkle::{node_type::NodeKey, StaleNodeIndex};
-use aptos_logger::error;
-use aptos_schemadb::{schema::KeyCodec, ReadOptions, SchemaBatch};
+use aptos_logger::info;
+use aptos_schemadb::{schema::KeyCodec, ReadOptions, SchemaBatch, DB};
 use aptos_types::transaction::{AtomicVersion, Version};
+use claims::{assert_ge, assert_lt};
+use once_cell::sync::Lazy;
 use std::sync::{atomic::Ordering, Arc};
 
 pub mod generics;
@@ -24,18 +26,25 @@ pub(crate) mod state_value_pruner;
 #[cfg(test)]
 mod test;
 
-pub const STATE_MERKLE_PRUNER_NAME: &str = "state_merkle_pruner";
+static TREE_PRUNER_WORKER_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(16)
+        .thread_name(|index| format!("tree_pruner_worker_{}", index))
+        .build()
+        .unwrap()
+});
 
 /// Responsible for pruning the state tree.
 #[derive(Debug)]
 pub struct StateMerklePruner<S> {
-    /// State DB.
+    /// State merkle DB.
     state_merkle_db: Arc<StateMerkleDb>,
     /// Keeps track of the target version that the pruner needs to achieve.
     target_version: AtomicVersion,
-    /// 1. min readable version
-    /// 2. if things before that version fully cleaned
-    progress: Mutex<(Version, bool)>,
+    /// Overall progress, updated when the whole version is done.
+    progress: AtomicVersion,
+    /// The version that is going to be pruned next.
+    next_version: Mutex<Option<Version>>,
     _phantom: std::marker::PhantomData<S>,
 }
 
@@ -44,7 +53,7 @@ where
     StaleNodeIndex: KeyCodec<S>,
 {
     fn name(&self) -> &'static str {
-        STATE_MERKLE_PRUNER_NAME
+        S::name()
     }
 
     fn prune(&self, batch_size: usize) -> Result<Version> {
@@ -54,30 +63,11 @@ where
         let progress = self.progress();
         let target_version = self.target_version();
 
-        match self.prune_state_merkle(progress, target_version, batch_size, None) {
-            Ok(new_min_readable_version) => Ok(new_min_readable_version),
-            Err(e) => {
-                error!(
-                    error = ?e,
-                    "Error pruning stale states.",
-                );
-                Err(e)
-                // On error, stop retrying vigorously by making next recv() blocking.
-            },
-        }
-    }
-
-    fn initialize_min_readable_version(&self) -> Result<Version> {
-        Ok(self
-            .state_merkle_db
-            .metadata_db()
-            .get::<DbMetadataSchema>(&S::tag())?
-            .map_or(0, |v| v.expect_version()))
+        self.prune_state_merkle(progress, target_version, batch_size)
     }
 
     fn progress(&self) -> Version {
-        let (version, _) = *self.progress.lock();
-        version
+        self.progress.load(Ordering::SeqCst)
     }
 
     fn set_target_version(&self, target_version: Version) {
@@ -91,14 +81,11 @@ where
         self.target_version.load(Ordering::Relaxed)
     }
 
-    // used only by blanket `initialize()`, use the underlying implementation instead elsewhere.
-    fn record_progress(&self, min_readable_version: Version) {
-        self.record_progress_impl(min_readable_version, false /* is_fully_pruned */);
-    }
-
-    fn is_pruning_pending(&self) -> bool {
-        let (min_readable_version, fully_pruned) = *self.progress.lock();
-        self.target_version() > min_readable_version || !fully_pruned
+    fn record_progress(&self, progress: Version) {
+        self.progress.store(progress, Ordering::SeqCst);
+        PRUNER_VERSIONS
+            .with_label_values(&[S::name(), "progress"])
+            .set(progress as i64);
     }
 }
 
@@ -106,97 +93,208 @@ impl<S: StaleNodeIndexSchemaTrait> StateMerklePruner<S>
 where
     StaleNodeIndex: KeyCodec<S>,
 {
-    pub fn new(state_merkle_db: Arc<StateMerkleDb>) -> Self {
+    pub fn new(state_merkle_db: Arc<StateMerkleDb>) -> Result<Self> {
+        info!(name = S::name(), "Initializing...");
+
+        let overall_progress = state_merkle_db
+            .metadata_db()
+            .get::<DbMetadataSchema>(&S::tag(None))?
+            .map_or(0, |v| v.expect_version());
+
+        let num_shards = state_merkle_db.num_shards();
+        let mut shard_progresses = Vec::with_capacity(num_shards as usize);
+        for shard_id in 0..num_shards {
+            let db_shard = state_merkle_db.db_shard(shard_id);
+            shard_progresses
+                .push(Self::get_progress(db_shard, Some(shard_id)).expect("Must succeed."));
+        }
+
         let pruner = StateMerklePruner {
             state_merkle_db,
-            target_version: AtomicVersion::new(0),
-            progress: Mutex::new((0, true)),
+            target_version: AtomicVersion::new(overall_progress),
+            progress: AtomicVersion::new(overall_progress),
+            next_version: Mutex::new(None),
             _phantom: std::marker::PhantomData,
         };
-        pruner.initialize();
-        pruner
+
+        pruner.finish_pending_pruning(overall_progress)?;
+
+        info!(
+            name = pruner.name(),
+            progress = overall_progress,
+            "Initialized."
+        );
+
+        Ok(pruner)
+    }
+
+    fn get_progress(state_merkle_db_shard: &DB, shard_id: Option<u8>) -> Result<Version> {
+        Ok(state_merkle_db_shard
+            .get::<DbMetadataSchema>(&S::tag(shard_id))?
+            .map_or(0, |v| v.expect_version()))
+    }
+
+    fn prune_state_merkle(
+        &self,
+        min_readable_version: Version,
+        target_version: Version,
+        batch_size: usize,
+    ) -> Result<Version> {
+        let mut min_readable_version = min_readable_version;
+        let mut target_version_for_this_batch =
+            self.next_version.lock().unwrap_or(min_readable_version);
+        while target_version_for_this_batch <= target_version {
+            self.record_progress(target_version_for_this_batch);
+            let next_version =
+                self.prune_top_levels(min_readable_version, target_version_for_this_batch)?;
+            *self.next_version.lock() = next_version;
+            self.prune_shards(target_version_for_this_batch, batch_size)?;
+            min_readable_version = target_version_for_this_batch;
+            if let Some(next_version) = next_version {
+                target_version_for_this_batch = next_version;
+            } else {
+                break;
+            }
+        }
+        self.record_progress(target_version);
+        Ok(target_version)
+    }
+
+    fn prune_top_levels(
+        &self,
+        min_readable_version: Version,
+        target_version: Version,
+    ) -> Result<Option<Version>> {
+        let batch = SchemaBatch::new();
+        let next_version = self.prune_state_merkle_shard(
+            self.state_merkle_db.metadata_db(),
+            min_readable_version,
+            target_version,
+            usize::max_value(),
+            &batch,
+        )?;
+        batch.put::<DbMetadataSchema>(&S::tag(None), &DbMetadataValue::Version(target_version))?;
+        self.state_merkle_db.metadata_db().write_schemas(batch)?;
+
+        Ok(next_version)
+    }
+
+    fn prune_single_shard(
+        &self,
+        shard_id: u8,
+        target_version: Version,
+        batch_size: usize,
+    ) -> Result<()> {
+        let _timer = OTHER_TIMERS_SECONDS
+            .with_label_values(&["state_merkle_pruner___prune_single_shard"])
+            .start_timer();
+        let shard_min_readable_version = self.get_shard_progress(shard_id);
+        if shard_min_readable_version != target_version {
+            assert_lt!(shard_min_readable_version, target_version);
+            self.update_shard_progress(shard_id, target_version);
+            let db_shard = self.state_merkle_db.db_shard(shard_id);
+            loop {
+                let batch = SchemaBatch::new();
+                let next_version = self.prune_state_merkle_shard(
+                    db_shard,
+                    shard_min_readable_version,
+                    target_version,
+                    batch_size,
+                    &batch,
+                )?;
+                if let Some(next_version) = next_version {
+                    if next_version <= target_version {
+                        db_shard.write_schemas(batch)?;
+                        continue;
+                    }
+                }
+                batch.put::<DbMetadataSchema>(
+                    &S::tag(Some(shard_id)),
+                    &DbMetadataValue::Version(target_version),
+                )?;
+                db_shard.write_schemas(batch)?;
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn prune_shards(&self, target_version: Version, batch_size: usize) -> Result<()> {
+        let num_shards = self.state_merkle_db.num_shards();
+        TREE_PRUNER_WORKER_POOL.scope(|s| {
+            for shard_id in 0..num_shards {
+                s.spawn(move |_| {
+                    self.prune_single_shard(shard_id, target_version, batch_size)
+                        .unwrap_or_else(|_| {
+                            panic!("Failed to prune state merkle shard {shard_id}.")
+                        });
+                });
+            }
+        });
+
+        Ok(())
+    }
+
+    fn finish_pending_pruning(&self, min_readable_version: Version) -> Result<()> {
+        self.prune_shards(min_readable_version, usize::max_value())
+    }
+
+    fn get_shard_progress(&self, shard_id: u8) -> Version {
+        self.shard_progresses.lock()[shard_id as usize]
+    }
+
+    fn update_shard_progress(&self, shard_id: u8, progress: Version) {
+        self.shard_progresses.lock()[shard_id as usize] = progress;
     }
 
     // If the existing schema batch is not none, this function only adds items need to be
     // deleted to the schema batch and the caller is responsible for committing the schema batches
     // to the DB.
-    pub fn prune_state_merkle(
+    fn prune_state_merkle_shard(
         &self,
+        state_merkle_db_shard: &DB,
         min_readable_version: Version,
         target_version: Version,
         batch_size: usize,
-        existing_schema_batch: Option<&mut SchemaBatch>,
-    ) -> anyhow::Result<Version> {
+        batch: &SchemaBatch,
+    ) -> Result<Option<Version>> {
         assert_ne!(batch_size, 0);
-        if target_version < min_readable_version {
-            return Ok(min_readable_version);
-        }
-        let (indices, is_end_of_target_version) =
-            self.get_stale_node_indices(min_readable_version, target_version, batch_size)?;
-        if indices.is_empty() {
-            self.record_progress_impl(target_version, is_end_of_target_version);
-            Ok(target_version)
-        } else {
-            let _timer = OTHER_TIMERS_SECONDS
-                .with_label_values(&["state_merkle_pruner_commit"])
-                .start_timer();
-            let new_min_readable_version =
-                indices.last().expect("Should exist.").stale_since_version;
+        assert_ge!(target_version, min_readable_version);
+        let (indices, next_version) = self.get_stale_node_indices(
+            state_merkle_db_shard,
+            min_readable_version,
+            target_version,
+            batch_size,
+        )?;
 
-            // Delete stale nodes.
-            if let Some(existing_schema_batch) = existing_schema_batch {
-                indices.into_iter().try_for_each(|index| {
-                    existing_schema_batch.delete::<JellyfishMerkleNodeSchema>(&index.node_key)?;
-                    existing_schema_batch.delete::<S>(&index)
-                })?;
-            } else {
-                let batch = SchemaBatch::new();
-                indices.into_iter().try_for_each(|index| {
-                    batch.delete::<JellyfishMerkleNodeSchema>(&index.node_key)?;
-                    batch.delete::<S>(&index)
-                })?;
+        indices.into_iter().try_for_each(|index| {
+            batch.delete::<JellyfishMerkleNodeSchema>(&index.node_key)?;
+            batch.delete::<S>(&index)
+        })?;
 
-                self.save_progress(new_min_readable_version, &batch)?;
-
-                // TODO(grao): Support sharding here.
-                self.state_merkle_db.metadata_db().write_schemas(batch)?;
-            }
-
-            // TODO(zcc): recording progress after writing schemas might provide wrong answers to
-            // API calls when they query min_readable_version while the write_schemas are still in
-            // progress.
-            self.record_progress_impl(new_min_readable_version, is_end_of_target_version);
-            Ok(new_min_readable_version)
-        }
-    }
-
-    fn record_progress_impl(&self, min_readable_version: Version, is_fully_pruned: bool) {
-        *self.progress.lock() = (min_readable_version, is_fully_pruned);
-        PRUNER_VERSIONS
-            .with_label_values(&[S::name(), "progress"])
-            .set(min_readable_version as i64);
+        Ok(next_version)
     }
 
     fn get_stale_node_indices(
         &self,
+        state_merkle_db_shard: &DB,
         start_version: Version,
         target_version: Version,
         batch_size: usize,
-    ) -> Result<(Vec<StaleNodeIndex>, bool)> {
+    ) -> Result<(Vec<StaleNodeIndex>, Option<Version>)> {
         let mut indices = Vec::new();
-        // TODO(grao): Support sharding here.
-        let mut iter = self
-            .state_merkle_db
-            .metadata_db()
-            .iter::<S>(ReadOptions::default())?;
+        let mut iter = state_merkle_db_shard.iter::<S>(ReadOptions::default())?;
         iter.seek(&StaleNodeIndex {
             stale_since_version: start_version,
             node_key: NodeKey::new_empty_path(0),
         })?;
 
+        let mut next_version = None;
         // over fetch by 1
         for _ in 0..=batch_size {
             if let Some((index, _)) = iter.next().transpose()? {
+                next_version = Some(index.stale_since_version);
                 if index.stale_since_version <= target_version {
                     indices.push(index);
                     continue;
@@ -205,16 +303,9 @@ where
             break;
         }
 
-        let is_end_of_target_version = if indices.len() > batch_size {
+        if indices.len() > batch_size {
             indices.pop();
-            false
-        } else {
-            true
-        };
-        Ok((indices, is_end_of_target_version))
-    }
-
-    fn save_progress(&self, version: Version, batch: &SchemaBatch) -> anyhow::Result<()> {
-        batch.put::<DbMetadataSchema>(&S::tag(), &DbMetadataValue::Version(version))
+        }
+        Ok((indices, next_version))
     }
 }

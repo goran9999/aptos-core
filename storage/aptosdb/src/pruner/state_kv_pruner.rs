@@ -9,6 +9,7 @@ use crate::{
     state_kv_db::StateKvDb,
 };
 use anyhow::Result;
+use aptos_logger::info;
 use aptos_schemadb::SchemaBatch;
 use aptos_types::transaction::{AtomicVersion, Version};
 use std::sync::{atomic::Ordering, Arc};
@@ -75,15 +76,24 @@ impl DBPruner for StateKvPruner {
 }
 
 impl StateKvPruner {
-    pub fn new(state_kv_db: Arc<StateKvDb>) -> Self {
+    pub fn new(state_kv_db: Arc<StateKvDb>) -> Result<Self> {
+        info!(name = STATE_KV_PRUNER_NAME, "Initializing...");
+
+        let progress = state_kv_db
+            .metadata_db()
+            .get::<DbMetadataSchema>(&DbMetadataKey::StateKvPrunerProgress)?
+            .map_or(0, |v| v.expect_version());
+
         let pruner = StateKvPruner {
             state_kv_db: Arc::clone(&state_kv_db),
-            target_version: AtomicVersion::new(0),
-            progress: AtomicVersion::new(0),
+            target_version: AtomicVersion::new(progress),
+            progress: AtomicVersion::new(progress),
             state_value_pruner: Arc::new(StateValuePruner::new(state_kv_db)),
         };
-        pruner.initialize();
-        pruner
+
+        info!(name = pruner.name(), progress = progress, "Initialized.");
+
+        Ok(pruner)
     }
 
     fn prune_inner(
