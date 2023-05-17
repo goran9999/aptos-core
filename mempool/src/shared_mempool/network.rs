@@ -26,7 +26,7 @@ use aptos_network::{
     application::{error::Error, interface::NetworkClientInterface},
     transport::ConnectionMetadata,
 };
-use aptos_types::{transaction::SignedTransaction, PeerId};
+use aptos_types::{account_address::AccountAddress, transaction::SignedTransaction, PeerId};
 use aptos_vm_validator::vm_validator::TransactionValidation;
 use fail::fail_point;
 use itertools::Itertools;
@@ -85,6 +85,7 @@ pub(crate) struct MempoolNetworkInterface<NetworkClient> {
     role: RoleType,
     mempool_config: MempoolConfig,
     prioritized_peers_comparator: PrioritizedPeersComparator,
+    // TODO: add stickiness cache
 }
 
 impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterface<NetworkClient> {
@@ -254,23 +255,6 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
         }
     }
 
-    /// Peers are prioritized when the local is a validator, or it's within the default failovers.
-    /// One is added for the primary peer
-    fn check_peer_prioritized(&self, peer: PeerNetworkId) -> Result<(), BroadcastError> {
-        if !self.role.is_validator() {
-            let priority = self
-                .prioritized_peers
-                .lock()
-                .iter()
-                .find_position(|peer_network_id| *peer_network_id == &peer)
-                .map_or(usize::MAX, |(pos, _)| pos);
-            if priority > self.mempool_config.default_failovers {
-                return Err(BroadcastError::PeerNotPrioritized(peer, priority));
-            }
-        }
-        Ok(())
-    }
-
     /// Determines the broadcast batch.  There are three types of batches:
     /// * Expired -> This timed out waiting for a response and needs to be resent
     /// * Retry -> This received a response telling it to retry later
@@ -286,9 +270,6 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
         let state = sync_states
             .get_mut(&peer)
             .ok_or(BroadcastError::PeerNotFound(peer))?;
-
-        // If the peer isn't prioritized, lets not broadcast
-        self.check_peer_prioritized(peer)?;
 
         // If backoff mode is on for this peer, only execute broadcasts that were scheduled as a backoff broadcast.
         // This is to ensure the backoff mode is actually honored (there is a chance a broadcast was scheduled
@@ -306,14 +287,14 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
             .sent_batches
             .clone()
             .into_iter()
-            .filter(|(id, _batch)| !mempool.timeline_range(&id.0).is_empty())
+            .filter(|(id, _batch)| !mempool.timeline_range(&id.0, Some(peer)).is_empty())
             .collect::<BTreeMap<MultiBatchId, SystemTime>>();
         state.broadcast_info.retry_batches = state
             .broadcast_info
             .retry_batches
             .clone()
             .into_iter()
-            .filter(|id| !mempool.timeline_range(&id.0).is_empty())
+            .filter(|id| !mempool.timeline_range(&id.0, Some(peer)).is_empty())
             .collect::<BTreeSet<MultiBatchId>>();
 
         // Check for batch to rebroadcast:
@@ -354,7 +335,7 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
                         Some(counters::RETRY_BROADCAST_LABEL)
                     };
 
-                    let txns = mempool.timeline_range(&id.0);
+                    let txns = mempool.timeline_range(&id.0, Some(peer));
                     (id.clone(), txns, metric_label)
                 },
                 None => {
@@ -362,6 +343,7 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
                     let (txns, new_timeline_id) = mempool.read_timeline(
                         &state.timeline_id,
                         self.mempool_config.shared_mempool_batch_size,
+                        Some(peer),
                     );
                     (
                         MultiBatchId::from_timeline_ids(&state.timeline_id, &new_timeline_id),
@@ -480,6 +462,26 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
 
     pub fn sync_states_exists(&self, peer: &PeerNetworkId) -> bool {
         self.sync_states.read().get(peer).is_some()
+    }
+
+    pub fn broadcast_peers(&self, _account: &AccountAddress) -> Vec<PeerNetworkId> {
+        // TODO: 1. for now, use the first prioritized peer
+        // TODO: 2. use account to check stickiness cache
+        // TODO: 3. then, expand to random other peers
+        if self.role.is_validator() {
+            return vec![];
+        }
+
+        let prioritized_peers = self.prioritized_peers.lock();
+        let len = prioritized_peers.len();
+        let peers: Vec<_> = prioritized_peers
+            .iter()
+            .take(self.mempool_config.default_failovers + 1)
+            .cloned()
+            .collect();
+        // TODO: add a sample, completely remove
+        info!("prioritized peers (len {}): {:?}", len, peers);
+        peers
     }
 }
 

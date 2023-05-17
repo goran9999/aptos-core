@@ -105,6 +105,8 @@ pub(crate) async fn coordinator<NetworkClient, TransactionValidator>(
             (network_id, event) = events.select_next_some() => {
                 handle_network_event(&executor, &bounded_executor, &mut scheduled_broadcasts, &mut smp, network_id, event).await;
             },
+            // TODO: A periodic job to resubmit transactions that haven't been committed yet
+            // TODO: -> Add a index in mempool to read from. Use smp.network to get the new peers, taking stickiness into account.
             complete => break,
         }
     }

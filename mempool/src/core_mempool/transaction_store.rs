@@ -19,7 +19,7 @@ use crate::{
     logging::{LogEntry, LogEvent, LogSchema, TxnsLog},
     shared_mempool::types::MultiBucketTimelineIndexIds,
 };
-use aptos_config::config::MempoolConfig;
+use aptos_config::{config::MempoolConfig, network_id::PeerNetworkId};
 use aptos_crypto::HashValue;
 use aptos_logger::{prelude::*, Level};
 use aptos_types::{
@@ -579,19 +579,15 @@ impl TransactionStore {
         &self,
         timeline_id: &MultiBucketTimelineIndexIds,
         count: usize,
+        peer: Option<PeerNetworkId>,
     ) -> (Vec<SignedTransaction>, MultiBucketTimelineIndexIds) {
         let mut batch = vec![];
         let mut batch_total_bytes: u64 = 0;
-        let mut last_timeline_id = timeline_id.id_per_bucket.clone();
 
+        let (buckets, updated_timeline_ids) =
+            self.timeline_index.read_timeline(timeline_id, count, peer);
         // Add as many transactions to the batch as possible
-        for (i, bucket) in self
-            .timeline_index
-            .read_timeline(timeline_id, count)
-            .iter()
-            .enumerate()
-            .rev()
-        {
+        for bucket in buckets.iter().rev() {
             for (address, sequence_number) in bucket {
                 if let Some(txn) = self.get_mempool_txn(address, *sequence_number) {
                     let transaction_bytes = txn.txn.raw_txn_bytes_len() as u64;
@@ -600,9 +596,6 @@ impl TransactionStore {
                     } else {
                         batch.push(txn.txn.clone());
                         batch_total_bytes = batch_total_bytes.saturating_add(transaction_bytes);
-                        if let TimelineState::Ready(timeline_id) = txn.timeline_state {
-                            last_timeline_id[i] = timeline_id;
-                        }
                         if let Ok(time_delta) = SystemTime::now().duration_since(txn.insertion_time)
                         {
                             let bucket = self.timeline_index.get_bucket(txn.ranking_score);
@@ -624,15 +617,16 @@ impl TransactionStore {
             }
         }
 
-        (batch, last_timeline_id.into())
+        (batch, updated_timeline_ids)
     }
 
     pub(crate) fn timeline_range(
         &self,
         start_end_pairs: &Vec<(u64, u64)>,
+        peer: Option<PeerNetworkId>,
     ) -> Vec<SignedTransaction> {
         self.timeline_index
-            .timeline_range(start_end_pairs)
+            .timeline_range(start_end_pairs, peer)
             .iter()
             .filter_map(|(account, sequence_number)| {
                 self.transactions

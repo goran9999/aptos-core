@@ -14,7 +14,7 @@ use crate::{
     logging::{LogEntry, LogSchema, TxnsLog},
     shared_mempool::types::MultiBucketTimelineIndexIds,
 };
-use aptos_config::config::NodeConfig;
+use aptos_config::{config::NodeConfig, network_id::PeerNetworkId};
 use aptos_consensus_types::common::TransactionInProgress;
 use aptos_crypto::HashValue;
 use aptos_logger::prelude::*;
@@ -139,6 +139,9 @@ impl Mempool {
         ranking_score: u64,
         db_sequence_number: u64,
         timeline_state: TimelineState,
+        // TODO: for backwards compatibility, an empty vector could mean we send to all?
+        // TODO: for all the tests, just added an empty vector, need to audit later
+        broadcast_peers: Vec<PeerNetworkId>,
     ) -> MempoolStatus {
         trace!(
             LogSchema::new(LogEntry::AddTxn)
@@ -164,6 +167,7 @@ impl Mempool {
             expiration_time,
             ranking_score,
             timeline_state,
+            broadcast_peers,
             db_sequence_number,
             now,
         );
@@ -349,16 +353,18 @@ impl Mempool {
         &self,
         timeline_id: &MultiBucketTimelineIndexIds,
         count: usize,
+        peer: Option<PeerNetworkId>,
     ) -> (Vec<SignedTransaction>, MultiBucketTimelineIndexIds) {
-        self.transactions.read_timeline(timeline_id, count)
+        self.transactions.read_timeline(timeline_id, count, peer)
     }
 
     /// Read transactions from timeline from `start_id` (exclusive) to `end_id` (inclusive).
     pub(crate) fn timeline_range(
         &self,
         start_end_pairs: &Vec<(u64, u64)>,
+        peer: Option<PeerNetworkId>,
     ) -> Vec<SignedTransaction> {
-        self.transactions.timeline_range(start_end_pairs)
+        self.transactions.timeline_range(start_end_pairs, peer)
     }
 
     pub fn gen_snapshot(&self) -> TxnsLog {

@@ -9,6 +9,7 @@ use crate::{
     logging::{LogEntry, LogSchema},
     shared_mempool::types::MultiBucketTimelineIndexIds,
 };
+use aptos_config::network_id::PeerNetworkId;
 use aptos_consensus_types::common::TransactionSummary;
 use aptos_logger::prelude::*;
 use aptos_types::account_address::AccountAddress;
@@ -199,7 +200,7 @@ impl Ord for TTLOrderingKey {
 /// logical reference to transaction content in main storage.
 pub struct TimelineIndex {
     timeline_id: u64,
-    timeline: BTreeMap<u64, (AccountAddress, u64)>,
+    timeline: BTreeMap<u64, (AccountAddress, u64, Vec<PeerNetworkId>)>,
 }
 
 impl TimelineIndex {
@@ -216,26 +217,51 @@ impl TimelineIndex {
         &self,
         timeline_id: u64,
         count: usize,
-    ) -> Vec<(AccountAddress, u64)> {
+        peer: Option<PeerNetworkId>,
+    ) -> (Vec<(AccountAddress, u64)>, u64) {
         let mut batch = vec![];
-        for (_id, &(address, sequence_number)) in self
+        let mut updated_timeline_id = timeline_id;
+        for (&id, (address, sequence_number, peers)) in self
             .timeline
             .range((Bound::Excluded(timeline_id), Bound::Unbounded))
         {
-            batch.push((address, sequence_number));
+            updated_timeline_id = id;
+            match peer {
+                Some(peer) => {
+                    if peers.contains(&peer) {
+                        batch.push((*address, *sequence_number));
+                    }
+                },
+                None => {
+                    batch.push((*address, *sequence_number));
+                },
+            }
             if batch.len() == count {
                 break;
             }
         }
-        batch
+        (batch, updated_timeline_id)
     }
 
     /// Read transactions from the timeline from `start_id` (exclusive) to `end_id` (inclusive).
-    pub(crate) fn timeline_range(&self, start_id: u64, end_id: u64) -> Vec<(AccountAddress, u64)> {
+    pub(crate) fn timeline_range(
+        &self,
+        start_id: u64,
+        end_id: u64,
+        peer: Option<PeerNetworkId>,
+    ) -> Vec<(AccountAddress, u64)> {
         self.timeline
             .range((Bound::Excluded(start_id), Bound::Included(end_id)))
-            .map(|(_idx, txn)| txn)
-            .cloned()
+            .filter_map(|(_id, (address, sequence_number, peers))| match peer {
+                Some(peer) => {
+                    if peers.contains(&peer) {
+                        Some((*address, *sequence_number))
+                    } else {
+                        None
+                    }
+                },
+                None => Some((*address, *sequence_number)),
+            })
             .collect()
     }
 
@@ -245,15 +271,21 @@ impl TimelineIndex {
             (
                 txn.get_sender(),
                 txn.sequence_info.transaction_sequence_number,
+                // TODO: does broadcast_peers really need to be a part of MempoolTransaction?
+                txn.broadcast_peers.clone(),
             ),
         );
-        txn.timeline_state = TimelineState::Ready(self.timeline_id);
+
+        // TODO: if the timeline_state is already Ready, then need to add to the vector, not overwrite it.
+        txn.timeline_state = TimelineState::Ready(vec![self.timeline_id]);
         self.timeline_id += 1;
     }
 
     pub(crate) fn remove(&mut self, txn: &MempoolTransaction) {
-        if let TimelineState::Ready(timeline_id) = txn.timeline_state {
-            self.timeline.remove(&timeline_id);
+        if let TimelineState::Ready(timeline_ids) = &txn.timeline_state {
+            for timeline_id in timeline_ids {
+                self.timeline.remove(timeline_id);
+            }
         }
     }
 
@@ -299,22 +331,27 @@ impl MultiBucketTimelineIndex {
     /// At most `count` transactions will be returned.
     pub(crate) fn read_timeline(
         &self,
-        timeline_id: &MultiBucketTimelineIndexIds,
+        timeline_ids: &MultiBucketTimelineIndexIds,
         count: usize,
-    ) -> Vec<Vec<(AccountAddress, u64)>> {
-        assert!(timeline_id.id_per_bucket.len() == self.bucket_mins.len());
+        peer: Option<PeerNetworkId>,
+    ) -> (Vec<Vec<(AccountAddress, u64)>>, MultiBucketTimelineIndexIds) {
+        assert_eq!(timeline_ids.id_per_bucket.len(), self.bucket_mins.len());
 
         let mut added = 0;
         let mut returned = vec![];
-        for (timeline, &timeline_id) in self
+        let mut updated_timeline_ids = timeline_ids.id_per_bucket.clone();
+        for (i, (timeline, &timeline_id)) in self
             .timelines
             .iter()
-            .zip(timeline_id.id_per_bucket.iter())
+            .zip(timeline_ids.id_per_bucket.iter())
+            .enumerate()
             .rev()
         {
-            let txns = timeline.read_timeline(timeline_id, count - added);
+            let (txns, updated_timeline_id) =
+                timeline.read_timeline(timeline_id, count - added, peer);
             added += txns.len();
             returned.push(txns);
+            updated_timeline_ids[i] = updated_timeline_id;
 
             if added == count {
                 break;
@@ -323,19 +360,23 @@ impl MultiBucketTimelineIndex {
         while returned.len() < self.timelines.len() {
             returned.push(vec![]);
         }
-        returned.iter().rev().cloned().collect()
+        (
+            returned.iter().rev().cloned().collect(),
+            MultiBucketTimelineIndexIds::from(updated_timeline_ids),
+        )
     }
 
     /// Read transactions from the timeline from `start_id` (exclusive) to `end_id` (inclusive).
     pub(crate) fn timeline_range(
         &self,
         start_end_pairs: &Vec<(u64, u64)>,
+        peer: Option<PeerNetworkId>,
     ) -> Vec<(AccountAddress, u64)> {
         assert_eq!(start_end_pairs.len(), self.timelines.len());
 
         let mut all_txns = vec![];
         for (timeline, &(start_id, end_id)) in self.timelines.iter().zip(start_end_pairs.iter()) {
-            let mut txns = timeline.timeline_range(start_id, end_id);
+            let mut txns = timeline.timeline_range(start_id, end_id, peer);
             all_txns.append(&mut txns);
         }
         all_txns

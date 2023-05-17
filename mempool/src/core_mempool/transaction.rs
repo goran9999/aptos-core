@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::core_mempool::TXN_INDEX_ESTIMATED_BYTES;
+use aptos_config::network_id::PeerNetworkId;
 use aptos_crypto::HashValue;
 use aptos_types::{account_address::AccountAddress, transaction::SignedTransaction};
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,7 @@ pub struct MempoolTransaction {
     pub expiration_time: Duration,
     pub ranking_score: u64,
     pub timeline_state: TimelineState,
+    pub broadcast_peers: Vec<PeerNetworkId>,
     pub sequence_info: SequenceInfo,
     pub insertion_time: SystemTime,
     pub was_parked: bool,
@@ -32,6 +34,9 @@ impl MempoolTransaction {
         expiration_time: Duration,
         ranking_score: u64,
         timeline_state: TimelineState,
+        // TODO: empty means all, for now
+        // TODO: reinsertion is still awkward, just need to replace this vector?
+        broadcast_peers: Vec<PeerNetworkId>,
         seqno: u64,
         insertion_time: SystemTime,
     ) -> Self {
@@ -44,6 +49,7 @@ impl MempoolTransaction {
             expiration_time,
             ranking_score,
             timeline_state,
+            broadcast_peers,
             insertion_time,
             was_parked: false,
         }
@@ -66,12 +72,14 @@ impl MempoolTransaction {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize, Hash, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Hash, Serialize)]
 pub enum TimelineState {
+    // TODO: retire the word "broadcast"?
     // The transaction is ready for broadcast.
-    // Associated integer represents it's position in the log of such transactions.
-    Ready(u64),
-    // Transaction is not yet ready for broadcast, but it might change in a future.
+    // The vector shows the position in the log -- the transaction can be present in multiple
+    // positions in the log due to retries to other peers.
+    Ready(Vec<u64>),
+    // Transaction is not yet ready for broadcast, but it might change in the future.
     NotReady,
     // Transaction will never be qualified for broadcasting.
     // Currently we don't broadcast transactions originated on other peers.
@@ -111,6 +119,7 @@ mod test {
             Duration::from_secs(1),
             1,
             TimelineState::NotReady,
+            vec![],
             0,
             SystemTime::now(),
         )

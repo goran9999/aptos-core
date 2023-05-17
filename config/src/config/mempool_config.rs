@@ -20,6 +20,7 @@ pub struct MempoolConfig {
     pub capacity_bytes: usize,
     /// Maximum number of transactions allowed in the Mempool per user
     pub capacity_per_user: usize,
+    // TODO: rename
     /// Number of failover peers to broadcast to when the primary network is alive
     pub default_failovers: usize,
     /// The maximum number of broadcasts sent to a single peer that are pending a response ACK at any point.

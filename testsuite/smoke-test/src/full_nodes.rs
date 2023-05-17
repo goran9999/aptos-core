@@ -23,7 +23,7 @@ use std::{
 
 #[tokio::test]
 async fn test_full_node_basic_flow() {
-    let mut swarm = local_swarm_with_fullnodes(1, 1).await;
+    let mut swarm = local_swarm_with_fullnodes(4, 4).await;
     let validator_peer_id = swarm.validators().next().unwrap().peer_id();
     let vfn_peer_id = swarm.full_nodes().next().unwrap().peer_id();
     let version = swarm.versions().max().unwrap();
