@@ -542,6 +542,7 @@ impl CliTestFramework {
             prompt_options: PromptOptions::yes(),
             encoding_options: EncodingOptions::default(),
             skip_faucet: false,
+            from_ledger: false,
         }
         .execute()
         .await
