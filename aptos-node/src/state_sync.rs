@@ -83,6 +83,7 @@ pub fn start_state_sync_and_get_notification_handles(
     StateSyncRuntimes,
     MempoolNotificationListener,
     ConsensusNotifier,
+    // TODO: include AptosDataClient?
 )> {
     // Get the network client and events
     let network_client = storage_network_interfaces.network_client;
