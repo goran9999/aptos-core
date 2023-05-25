@@ -27,7 +27,7 @@ fn test_basic_fungible_token() {
 
     let result = h.publish_package_with_options(
         &alice,
-        &common::test_dir_path("../../../move-examples/fungible_token"),
+        &common::test_dir_path("../../../move-examples/fungible_asset/fungible_token"),
         build_options,
     );
     assert_success!(result);
