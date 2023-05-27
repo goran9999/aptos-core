@@ -19,6 +19,7 @@ use aptos_config::{
     config::{MempoolConfig, PeerRole, RoleType},
     network_id::PeerNetworkId,
 };
+use aptos_data_client::client::AptosDataClient;
 use aptos_infallible::{Mutex, RwLock};
 use aptos_logger::prelude::*;
 use aptos_netcore::transport::ConnectionOrigin;
@@ -85,6 +86,7 @@ pub(crate) struct MempoolNetworkInterface<NetworkClient> {
     role: RoleType,
     mempool_config: MempoolConfig,
     prioritized_peers_comparator: PrioritizedPeersComparator,
+    aptos_data_client: AptosDataClient,
     // TODO: add stickiness cache
 }
 
@@ -93,6 +95,7 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
         network_client: NetworkClient,
         role: RoleType,
         mempool_config: MempoolConfig,
+        aptos_data_client: AptosDataClient,
     ) -> MempoolNetworkInterface<NetworkClient> {
         Self {
             network_client,
@@ -101,6 +104,7 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
             role,
             mempool_config,
             prioritized_peers_comparator: PrioritizedPeersComparator::new(),
+            aptos_data_client,
         }
     }
 
@@ -472,15 +476,43 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
             return vec![];
         }
 
-        let prioritized_peers = self.prioritized_peers.lock();
-        let len = prioritized_peers.len();
-        let peers: Vec<_> = prioritized_peers
-            .iter()
-            .take(self.mempool_config.default_failovers + 1)
-            .cloned()
+        let peer_states = self.aptos_data_client.get_peer_states();
+        let mut peer_versions: Vec<_> = peer_states
+            .get_peer_to_states()
+            .into_iter()
+            .map(|(peer, state)| {
+                if let Some(summary) = state.storage_summary_if_not_ignored() {
+                    if let Some(ledger_info) = &summary.data_summary.synced_ledger_info {
+                        return (peer, ledger_info.ledger_info().version());
+                    }
+                }
+                (peer, 0)
+            })
             .collect();
+        // TODO: random shuffle to keep from biasing
+        // peer_versions.shuffle()
+        // TODO: what if we don't actually have a mempool connection to this host?
+        // TODO: do we have to filter? or penalize but still allow selection?
+        peer_versions.sort_by_key(|(_peer, version)| *version);
+        let peers: Vec<_> = peer_versions
+            .iter()
+            .rev()
+            .take(self.mempool_config.default_failovers + 1)
+            .map(|(peer, _version)| *peer)
+            .collect();
+
+        // let prioritized_peers = self.prioritized_peers.lock();
+        // let len = prioritized_peers.len();
+        // let peers: Vec<_> = prioritized_peers
+        //     .iter()
+        //     .take(self.mempool_config.default_failovers + 1)
+        //     .cloned()
+        //     .collect();
         // TODO: add a sample, completely remove
-        info!("prioritized peers (len {}): {:?}", len, peers);
+        // info!("prioritized peers (len {}): {:?}", len, peers);
+
+        // TODO: add a sample, completely remove
+        info!("peers (len {}): {:?}", peer_versions.len(), peers);
         peers
     }
 }

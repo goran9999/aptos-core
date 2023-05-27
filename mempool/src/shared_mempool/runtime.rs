@@ -12,6 +12,7 @@ use crate::{
     QuorumStoreRequest,
 };
 use aptos_config::config::NodeConfig;
+use aptos_data_client::client::AptosDataClient;
 use aptos_event_notifications::ReconfigNotificationListener;
 use aptos_infallible::{Mutex, RwLock};
 use aptos_logger::Level;
@@ -41,6 +42,7 @@ pub(crate) fn start_shared_mempool<TransactionValidator>(
     db: Arc<dyn DbReader>,
     validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
+    aptos_data_client: AptosDataClient,
 ) where
     TransactionValidator: TransactionValidation + 'static,
 {
@@ -53,6 +55,7 @@ pub(crate) fn start_shared_mempool<TransactionValidator>(
             validator,
             subscribers,
             config.base.role,
+            aptos_data_client,
         );
 
     executor.spawn(coordinator(
@@ -87,6 +90,7 @@ pub fn bootstrap(
     quorum_store_requests: Receiver<QuorumStoreRequest>,
     mempool_listener: MempoolNotificationListener,
     mempool_reconfig_events: ReconfigNotificationListener,
+    aptos_data_client: AptosDataClient,
 ) -> Runtime {
     let runtime = aptos_runtimes::spawn_named_runtime("shared-mem".into(), None);
     let mempool = Arc::new(Mutex::new(CoreMempool::new(config)));
@@ -104,6 +108,7 @@ pub fn bootstrap(
         db,
         vm_validator,
         vec![],
+        aptos_data_client,
     );
     runtime
 }
