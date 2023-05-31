@@ -66,7 +66,7 @@ impl<
         validator: Arc<RwLock<TransactionValidator>>,
         subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
         role: RoleType,
-        aptos_data_client: AptosDataClient,
+        aptos_data_client: Option<AptosDataClient>,
     ) -> Self {
         let network_interface =
             MempoolNetworkInterface::new(network_client, role, config.clone(), aptos_data_client);

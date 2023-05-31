@@ -605,6 +605,7 @@ fn setup_mempool(
         db_ro,
         vm_validator,
         vec![sender],
+        None,
     );
 
     (

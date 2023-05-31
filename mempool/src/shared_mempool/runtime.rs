@@ -42,7 +42,7 @@ pub(crate) fn start_shared_mempool<TransactionValidator>(
     db: Arc<dyn DbReader>,
     validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
-    aptos_data_client: AptosDataClient,
+    aptos_data_client: Option<AptosDataClient>,
 ) where
     TransactionValidator: TransactionValidation + 'static,
 {
@@ -108,7 +108,7 @@ pub fn bootstrap(
         db,
         vm_validator,
         vec![],
-        aptos_data_client,
+        Some(aptos_data_client),
     );
     runtime
 }

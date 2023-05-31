@@ -618,6 +618,7 @@ fn start_node_mempool(
         Arc::new(MockDbReaderWriter),
         Arc::new(RwLock::new(MockVMValidator)),
         vec![sender],
+        None,
     );
 
     (mempool, runtime, subscriber)

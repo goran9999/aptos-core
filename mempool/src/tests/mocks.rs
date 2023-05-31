@@ -151,6 +151,7 @@ impl MockSharedMempool {
             db.reader.clone(),
             Arc::new(RwLock::new(validator)),
             vec![],
+            None,
         );
 
         (ac_client, mempool, quorum_store_sender, mempool_notifier)

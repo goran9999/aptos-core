@@ -55,6 +55,7 @@ pub fn test_mempool_process_incoming_transactions_impl(
         vm_validator,
         vec![],
         config.base.role,
+        None,
     );
 
     let _ = tasks::process_incoming_transactions(&smp, txns, timeline_state);
