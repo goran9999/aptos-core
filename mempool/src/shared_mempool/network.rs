@@ -31,6 +31,7 @@ use aptos_types::{account_address::AccountAddress, transaction::SignedTransactio
 use aptos_vm_validator::vm_validator::TransactionValidation;
 use fail::fail_point;
 use itertools::Itertools;
+use moka::sync::Cache;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
@@ -87,7 +88,7 @@ pub(crate) struct MempoolNetworkInterface<NetworkClient> {
     mempool_config: MempoolConfig,
     prioritized_peers_comparator: PrioritizedPeersComparator,
     aptos_data_client: Option<AptosDataClient>,
-    // TODO: add stickiness cache
+    stickiness_cache: Arc<Cache<AccountAddress, Vec<PeerNetworkId>>>,
 }
 
 impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterface<NetworkClient> {
@@ -105,6 +106,12 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
             mempool_config,
             prioritized_peers_comparator: PrioritizedPeersComparator::new(),
             aptos_data_client,
+            stickiness_cache: Arc::new(
+                Cache::builder()
+                    .max_capacity(100_000)
+                    .time_to_idle(Duration::from_secs(10))
+                    .build(),
+            ),
         }
     }
 
@@ -468,43 +475,43 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
         self.sync_states.read().get(peer).is_some()
     }
 
-    pub fn broadcast_peers(&self, _account: &AccountAddress) -> Vec<PeerNetworkId> {
-        // TODO: 1. for now, use the first prioritized peer
-        // TODO: 2. use account to check stickiness cache
-        // TODO: 3. then, expand to random other peers
+    pub fn broadcast_peers(&self, account: &AccountAddress) -> Vec<PeerNetworkId> {
+        // TODO: Need a mode to exclude already tried peers
         if self.role.is_validator() {
             return vec![];
         }
 
         if let Some(aptos_data_client) = &self.aptos_data_client {
-            let peer_states = aptos_data_client.get_peer_states();
-            let mut peer_versions: Vec<_> = peer_states
-                .get_peer_to_states()
-                .into_iter()
-                .map(|(peer, state)| {
-                    if let Some(summary) = state.storage_summary_if_not_ignored() {
-                        if let Some(ledger_info) = &summary.data_summary.synced_ledger_info {
-                            return (peer, ledger_info.ledger_info().version());
+            // TODO: Check if the peers are actually still good. If not, atomically replace.
+            self.stickiness_cache.get_with(*account, || {
+                let peer_states = aptos_data_client.get_peer_states();
+                let mut peer_versions: Vec<_> = peer_states
+                    .get_peer_to_states()
+                    .into_iter()
+                    .map(|(peer, state)| {
+                        if let Some(summary) = state.storage_summary_if_not_ignored() {
+                            if let Some(ledger_info) = &summary.data_summary.synced_ledger_info {
+                                return (peer, ledger_info.ledger_info().version());
+                            }
                         }
-                    }
-                    (peer, 0)
-                })
-                .collect();
-            // TODO: random shuffle to keep from biasing
-            // peer_versions.shuffle()
-            // TODO: what if we don't actually have a mempool connection to this host?
-            // TODO: do we have to filter? or penalize but still allow selection?
-            peer_versions.sort_by_key(|(_peer, version)| *version);
-            let peers: Vec<_> = peer_versions
-                .iter()
-                .rev()
-                .take(self.mempool_config.default_failovers + 1)
-                .map(|(peer, _version)| *peer)
-                .collect();
-
-            // TODO: add a sample, completely remove
-            info!("peers (len {}): {:?}", peer_versions.len(), peers);
-            peers
+                        (peer, 0)
+                    })
+                    .collect();
+                // TODO: random shuffle to keep from biasing
+                // peer_versions.shuffle()
+                // TODO: what if we don't actually have a mempool connection to this host?
+                // TODO: do we have to filter? or penalize but still allow selection?
+                peer_versions.sort_by_key(|(_peer, version)| *version);
+                let peers: Vec<_> = peer_versions
+                    .iter()
+                    .rev()
+                    .take(self.mempool_config.default_failovers + 1)
+                    .map(|(peer, _version)| *peer)
+                    .collect();
+                // TODO: add a sample, completely remove
+                info!("peers (len {}): {:?}", peer_versions.len(), peers);
+                peers
+            })
         } else {
             // TODO: Remove this legacy behavior, with a good Mock for AptosDataClientInterface
             let prioritized_peers = self.prioritized_peers.lock();
