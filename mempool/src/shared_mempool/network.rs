@@ -258,7 +258,7 @@ impl<NetworkClient: NetworkClientInterface<MempoolSyncMsg>> MempoolNetworkInterf
     }
 
     pub fn is_backoff_mode(&self, peer: &PeerNetworkId) -> bool {
-        if let Some(state) = self.sync_states.write().get(peer) {
+        if let Some(state) = self.sync_states.read().get(peer) {
             state.broadcast_info.backoff_mode
         } else {
             // If we don't have sync state, we shouldn't backoff
