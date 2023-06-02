@@ -341,7 +341,6 @@ fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
                 match validation_result.status() {
                     None => {
                         let ranking_score = validation_result.score();
-                        // TODO: use this in add_txn
                         let broadcast_peers =
                             smp.network_interface.broadcast_peers(&transaction.sender());
                         let mempool_status = mempool.add_txn(
