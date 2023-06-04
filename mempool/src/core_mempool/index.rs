@@ -200,7 +200,7 @@ impl Ord for TTLOrderingKey {
 /// logical reference to transaction content in main storage.
 pub struct TimelineIndex {
     timeline_id: u64,
-    timeline: BTreeMap<u64, (AccountAddress, u64, Vec<PeerNetworkId>)>,
+    timeline: BTreeMap<u64, (AccountAddress, u64, Option<PeerNetworkId>)>,
 }
 
 impl TimelineIndex {
@@ -221,19 +221,22 @@ impl TimelineIndex {
     ) -> (Vec<(AccountAddress, u64)>, u64) {
         let mut batch = vec![];
         let mut updated_timeline_id = timeline_id;
-        for (&id, (address, sequence_number, peers)) in self
+        for (&id, (address, sequence_number, timeline_peer)) in self
             .timeline
             .range((Bound::Excluded(timeline_id), Bound::Unbounded))
         {
             updated_timeline_id = id;
-            match peer {
-                Some(peer) => {
-                    if peers.contains(&peer) {
+            match (peer, timeline_peer) {
+                (Some(peer), Some(timeline_peer)) => {
+                    if peer == *timeline_peer {
                         batch.push((*address, *sequence_number));
                     }
                 },
-                None => {
+                (None, None) => {
                     batch.push((*address, *sequence_number));
+                },
+                _ => {
+                    panic!("mismatch");
                 },
             }
             if batch.len() == count {
@@ -252,33 +255,52 @@ impl TimelineIndex {
     ) -> Vec<(AccountAddress, u64)> {
         self.timeline
             .range((Bound::Excluded(start_id), Bound::Included(end_id)))
-            .filter_map(|(_id, (address, sequence_number, peers))| match peer {
-                Some(peer) => {
-                    if peers.contains(&peer) {
-                        Some((*address, *sequence_number))
-                    } else {
-                        None
-                    }
-                },
-                None => Some((*address, *sequence_number)),
+            .filter_map(|(_id, (address, sequence_number, timeline_peer))| {
+                match (peer, timeline_peer) {
+                    (Some(peer), Some(timeline_peer)) => {
+                        if peer == *timeline_peer {
+                            Some((*address, *sequence_number))
+                        } else {
+                            None
+                        }
+                    },
+                    (None, None) => Some((*address, *sequence_number)),
+                    _ => {
+                        panic!("mismatch");
+                    },
+                }
             })
             .collect()
     }
 
-    pub(crate) fn insert(&mut self, txn: &mut MempoolTransaction) {
-        self.timeline.insert(
-            self.timeline_id,
-            (
-                txn.get_sender(),
-                txn.sequence_info.transaction_sequence_number,
-                // TODO: does broadcast_peers really need to be a part of MempoolTransaction?
-                txn.broadcast_peers.clone(),
-            ),
-        );
-
-        // TODO: if the timeline_state is already Ready, then need to add to the vector, not overwrite it.
-        txn.timeline_state = TimelineState::Ready(vec![self.timeline_id]);
-        self.timeline_id += 1;
+    pub(crate) fn insert(&mut self, txn: &mut MempoolTransaction, peers: Vec<PeerNetworkId>) {
+        if peers.is_empty() {
+            self.timeline.insert(
+                self.timeline_id,
+                (
+                    txn.get_sender(),
+                    txn.sequence_info.transaction_sequence_number,
+                    None,
+                ),
+            );
+            txn.timeline_state = TimelineState::Ready(vec![self.timeline_id]);
+            self.timeline_id += 1;
+        } else {
+            let mut timeline_ids = vec![];
+            for peer in peers {
+                self.timeline.insert(
+                    self.timeline_id,
+                    (
+                        txn.get_sender(),
+                        txn.sequence_info.transaction_sequence_number,
+                        Some(peer),
+                    ),
+                );
+                timeline_ids.push(self.timeline_id);
+                self.timeline_id += 1;
+            }
+            txn.timeline_state = TimelineState::Ready(timeline_ids);
+        }
     }
 
     pub(crate) fn remove(&mut self, txn: &MempoolTransaction) {
@@ -391,8 +413,8 @@ impl MultiBucketTimelineIndex {
         self.timelines.get_mut(index).unwrap()
     }
 
-    pub(crate) fn insert(&mut self, txn: &mut MempoolTransaction) {
-        self.get_timeline(txn.ranking_score).insert(txn);
+    pub(crate) fn insert(&mut self, txn: &mut MempoolTransaction, peers: Vec<PeerNetworkId>) {
+        self.get_timeline(txn.ranking_score).insert(txn, peers);
     }
 
     pub(crate) fn remove(&mut self, txn: &MempoolTransaction) {

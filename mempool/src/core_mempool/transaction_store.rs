@@ -435,7 +435,8 @@ impl TransactionStore {
 
                 let process_broadcast_ready = txn.timeline_state == TimelineState::NotReady;
                 if process_broadcast_ready {
-                    self.timeline_index.insert(txn);
+                    // TODO: instead, dynamically retrieve from BroadcastPeerSelector
+                    self.timeline_index.insert(txn, txn.broadcast_peers.clone());
                 }
 
                 if process_ready {
