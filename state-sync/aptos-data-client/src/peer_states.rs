@@ -374,6 +374,10 @@ impl PeerStates {
     pub fn get_peer_to_states(&self) -> HashMap<PeerNetworkId, PeerState> {
         self.peer_to_state.clone()
     }
+
+    pub fn get_peers_and_metadata(&self) -> Arc<PeersAndMetadata> {
+        self.peers_and_metadata.clone()
+    }
 }
 
 /// To calculate the optimal chunk size, we take the median for each

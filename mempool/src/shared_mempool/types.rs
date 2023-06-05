@@ -14,7 +14,6 @@ use aptos_config::{
 };
 use aptos_consensus_types::common::{RejectedTransactionSummary, TransactionInProgress};
 use aptos_crypto::HashValue;
-use aptos_data_client::client::AptosDataClient;
 use aptos_infallible::{Mutex, RwLock};
 use aptos_network::{
     application::interface::NetworkClientInterface, transport::ConnectionMetadata,
@@ -66,10 +65,8 @@ impl<
         validator: Arc<RwLock<TransactionValidator>>,
         subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
         role: RoleType,
-        aptos_data_client: Option<AptosDataClient>,
     ) -> Self {
-        let network_interface =
-            MempoolNetworkInterface::new(network_client, role, config.clone(), aptos_data_client);
+        let network_interface = MempoolNetworkInterface::new(network_client, role, config.clone());
         SharedMempool {
             mempool,
             config,

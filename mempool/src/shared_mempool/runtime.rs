@@ -55,7 +55,6 @@ pub(crate) fn start_shared_mempool<TransactionValidator>(
             validator,
             subscribers,
             config.base.role,
-            aptos_data_client,
         );
 
     executor.spawn(coordinator(
@@ -66,6 +65,8 @@ pub(crate) fn start_shared_mempool<TransactionValidator>(
         quorum_store_requests,
         mempool_listener,
         mempool_reconfig_events,
+        config.mempool.peer_update_interval_ms,
+        aptos_data_client,
     ));
 
     executor.spawn(gc_coordinator(
