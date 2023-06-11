@@ -37,6 +37,9 @@ futures = { workspace = true }
 hex = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }
+num_enum={workspace=true}
+uuid={workspace=true}
+dotenv ={ workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }

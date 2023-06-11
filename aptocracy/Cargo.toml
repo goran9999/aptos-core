@@ -1,0 +1,32 @@
+[package]
+name = "aptocracy"
+version = "0.1.0"
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+
+
+
+[dependencies]
+juniper = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+base64 = { workspace = true }
+diesel = { workspace = true }
+diesel_derives_traits = "0.2.0"
+dotenv = { workspace = true }
+actix-web = { workspace = true }
+actix-cors = { workspace = true }
+actix-rt = { workspace = true }
+serde = {workspace = true }
+chrono = { workspace = true }
+aptos-indexer ={ path = "../crates/indexer"}
+serde_json = {workspace = true}
+uuid = { workspace = true }
+
+
+
+
+[[bin]]
+name = "aptocracy"
+path = "src/main.rs"

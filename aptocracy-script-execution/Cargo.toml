@@ -1,0 +1,32 @@
+[package]
+name = "aptocracy-script-execution"
+version = "0.1.0"
+
+
+edition = { workspace = true }
+rust-version = { workspace = true }
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aptocracy = {workspace =true}
+aptos-indexer = {workspace = true }
+aptos-sdk = {workspace=true}
+actix-web = {workspace=true}
+actix-cors = {workspace=true}
+uuid = {workspace=true}
+actix-rt = { workspace = true }
+diesel = {workspace=true}
+dotenv = {workspace=true}
+serde = {workspace = true }
+serde_json = {workspace = true}
+url = {workspace=true}
+hex = { workspace = true }
+
+
+
+
+[[bin]]
+name = "aptocracy-script-execution"
+path = "src/main.rs"
+
+

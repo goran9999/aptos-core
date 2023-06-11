@@ -3,6 +3,144 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    aptocracy_user (user_address) {
+        user_address -> Text,
+        email -> Nullable<Text>,
+        socials -> Nullable<Text>,
+        name -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    execution_step (id) {
+        id -> Uuid,
+        execution_hash -> Text,
+        execution_parameters -> Text,
+        execution_paramter_types -> Text,
+        executed -> Bool,
+        vote_option_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    member (member_address, aptocracy_address) {
+        member_address -> Varchar,
+        aptocracy_address -> Varchar,
+        role -> Text,
+        status -> Nullable<Int8>,
+        proposal_created -> Nullable<Int8>,
+    }
+}
+diesel::table! {
+    organization (address) {
+    address -> Text,
+    name -> Text,
+    creator -> Text,
+    default_role -> Text,
+    governing_coin -> Text,
+    governing_collection_info -> Text,
+    invite_only -> Bool,
+    main_governance -> Nullable<Int8>,
+    max_voter_weight -> Nullable<Int8>,
+    org_type -> Text,
+    treasury_count -> Int4,
+    role_config -> Text,
+    created_at -> Timestamp,
+    image -> Nullable<Text>,
+    description -> Nullable<Text>,
+    main_treasury -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    proposal (id) {
+        id -> Uuid,
+        proposal_id -> Int8,
+        treasury_address -> Text,
+        aptocracy_address -> Text,
+        name -> Text,
+        description -> Text,
+        discussion_link -> Text,
+        creator -> Text,
+        max_vote_weight -> Int8,
+        cancelled_at -> Nullable<Int8>,
+        created_at -> Int8,
+        early_tipping -> Bool,
+        executed_at -> Nullable<Int8>,
+        max_voter_options -> Int8,
+        max_voting_time -> Int8,
+        state -> Int4,
+        vote_threshold -> Text,
+        voting_finalized_at -> Nullable<Int8>,
+        proposal_type -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    scripts (script_hash) {
+        script_hash -> Text,
+        proposal_type -> Int4,
+        bytecode -> Text,
+    }
+}
+
+diesel::table! {
+    treasury (treasury_address) {
+        treasury_address -> Text,
+        aptocracy_address -> Text,
+        authority -> Text,
+        treasury_index -> Int4,
+        deposited_amount -> Int8,
+        treasury_coin -> Text,
+        governance_id -> Int8,
+    }
+}
+
+diesel::table! {
+    vote_options (id) {
+        id -> Uuid,
+        option -> Text,
+        vote_weight -> Int8,
+        option_elected -> Bool,
+        proposal_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    vote_record (member_address, proposal_id, treasury_address) {
+        member_address -> Text,
+        proposal_id -> Int8,
+        treasury_address -> Text,
+        voter_weight -> Int8,
+        elected_options -> Array<Nullable<Text>>,
+        voted_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    deposit_record (treasury_address, member_address) {
+        treasury_address -> Text,
+        member_address -> Text,
+        aptocracy_address -> Text,
+        accumulated_amount -> Int8,
+        last_deposit -> Timestamp,
+    }
+}
+
+diesel::table! {
+    governance (aptocracy_address, governance_id) {
+        aptocracy_address -> Varchar,
+        governance_id -> Int8,
+        max_voting_time -> Int8,
+        quorum -> Int8,
+        approval_quorum -> Int8,
+        early_tipping -> Bool,
+        valid_from -> Int8,
+        valid_to -> Nullable<Int8>,
+    }
+}
+
+diesel::table! {
     block_metadata_transactions (version) {
         version -> Int8,
         block_height -> Int8,

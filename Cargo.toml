@@ -2,6 +2,8 @@
 resolver = "2"
 
 members = [
+    "aptocracy",
+    "aptocracy-script-execution",
     "api",
     "api/openapi-spec-generator",
     "api/test-context",
@@ -245,7 +247,13 @@ rust-version = "1.64"
 [workspace.dependencies]
 # Internal crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
+actix-web = "4.3.0"
+aws-sdk-s3 = "0.27.0"
+aws-config = "0.55.2"
+actix-cors = "0.6.4"
+actix-rt = "2.8.0"
 aptos = { path = "crates/aptos" }
+aptocracy = {path="./aptocracy"}
 aptos-accumulator = { path = "storage/accumulator" }
 aptos-aggregator = { path = "aptos-move/aptos-aggregator" }
 aptos-api = { path = "api" }
@@ -338,6 +346,8 @@ aptos-peer-monitoring-service-types = { path = "network/peer-monitoring-service/
 aptos-proptest-helpers = { path = "crates/aptos-proptest-helpers" }
 aptos-protos = { path = "crates/aptos-protos" }
 aptos-proxy = { path = "crates/proxy" }
+dotenv = "0.15.0"
+juniper = {version="0.15.0",features=["graphql-parser-integration","graphql-parser","serde_json"]}
 aptos-push-metrics = { path = "crates/aptos-push-metrics" }
 aptos-rate-limiter = { path = "crates/aptos-rate-limiter" }
 aptos-release-builder = { path = "aptos-move/aptos-release-builder" }
@@ -383,6 +393,7 @@ aptos-vm-types = { path = "aptos-move/aptos-vm-types" }
 aptos-vm-validator = { path = "vm-validator" }
 aptos-warp-webserver = { path = "crates/aptos-warp-webserver" }
 aptos-writeset-generator = { path = "aptos-move/writeset-transaction-generator" }
+num_enum = "0.5.6"
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
@@ -432,14 +443,8 @@ dashmap = "5.2.0"
 datatest-stable = "0.1.1"
 debug-ignore = { version = "1.0.3", features = ["serde"] }
 derivative = "2.2.0"
-diesel = { version = "2.1.0", features = [
-    "chrono",
-    "postgres",
-    "r2d2",
-    "numeric",
-    "serde_json",
-] }
-diesel_migrations = { version = "2.1.0", features = ["postgres"] }
+diesel = { version = "2.0.4", features = ["chrono", "postgres", "r2d2", "numeric", "serde_json","uuid"] }
+diesel_migrations = { version = "2.0.0", features = ["postgres"] }
 digest = "0.9.0"
 dir-diff = "0.3.2"
 dirs = "4.0.0"
