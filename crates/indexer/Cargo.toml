@@ -30,10 +30,13 @@ bcs = { workspace = true }
 bigdecimal = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+uuid={workspace=true}
+num_enum={workspace=true}
 diesel = { workspace = true }
 diesel_migrations = { workspace = true }
 field_count = { workspace = true }
 futures = { workspace = true }
+dotenv = {workspace=true}
 hex = { workspace = true }
 once_cell = { workspace = true }
 regex = { workspace = true }

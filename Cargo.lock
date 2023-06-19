@@ -1481,9 +1481,11 @@ dependencies = [
  "clap 3.2.23",
  "diesel",
  "diesel_migrations",
+ "dotenv",
  "field_count",
  "futures",
  "hex",
+ "num_enum",
  "once_cell",
  "regex",
  "reqwest",
@@ -1494,6 +1496,7 @@ dependencies = [
  "sha2 0.9.9",
  "tokio",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -8930,6 +8933,27 @@ checksum = "19e64526ebdee182341572e50e9ad03965aa510cd94427a4549448f285e957a1"
 dependencies = [
  "hermit-abi 0.1.19",
  "libc",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f646caf906c20226733ed5b1374287eb97e3c2a5c227ce668c1f2ce20ae57c9"
+dependencies = [
+ "num_enum_derive",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcbff9bc912032c62bf65ef1d5aea88983b420f4f839db1e9b0c281a25c9c799"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2 1.0.47",
+ "quote 1.0.21",
+ "syn 1.0.105",
 ]
 
 [[package]]
