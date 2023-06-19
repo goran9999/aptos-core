@@ -28,10 +28,15 @@ storage:
   storage_pruner_config:
     ledger_pruner_config:
       enable: false
+state_sync:
+ state_sync_driver:
+     bootstrapping_mode: DownloadLatestStates
+     continuous_syncing_mode: ApplyTransactionOutputs
 
 indexer:
   enabled: true
-  postgres_uri: "postgresql://doadmin:AVNS_uXkhF7qR5ZK2betI3B2@db-postgre-aptocracy-do-user-7468890-0.b.db.ondigitalocean.com:25060/aptocracy?sslmode=require"
+  postgres_uri: "postgresql://postgres@localhost:5432/aptocracy_testnet"
   processor: "aptocracy_processor"
-  check_chain_id: true
+  check_chain_id: false
   emit_every: 100
+  starting_version: 550000000
