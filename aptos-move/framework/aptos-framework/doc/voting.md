@@ -1106,7 +1106,8 @@ there are more yes votes than no. If either of these conditions is not met, this
 Return the next unassigned proposal id
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_next_proposal_id">next_proposal_id</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_next_proposal_id">next_proposal_id</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>): u64
 </code></pre>
 
 
@@ -1131,7 +1132,8 @@ Return the next unassigned proposal id
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_voting_closed">is_voting_closed</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_voting_closed">is_voting_closed</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
 </code></pre>
 
 
@@ -1193,7 +1195,8 @@ Return the state of the proposal with given id.
 @return Proposal state as an enum value.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_state">get_proposal_state</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_state">get_proposal_state</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
 </code></pre>
 
 
@@ -1234,7 +1237,8 @@ Return the state of the proposal with given id.
 Return the proposal's creation time.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_creation_secs">get_proposal_creation_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_creation_secs">get_proposal_creation_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
 </code></pre>
 
 
@@ -1264,7 +1268,8 @@ Return the proposal's creation time.
 Return the proposal's expiration time.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_expiration_secs">get_proposal_expiration_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_expiration_secs">get_proposal_expiration_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
 </code></pre>
 
 
@@ -1294,7 +1299,8 @@ Return the proposal's expiration time.
 Return the proposal's execution hash.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_execution_hash">get_execution_hash</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_execution_hash">get_execution_hash</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -1324,7 +1330,8 @@ Return the proposal's execution hash.
 Return the proposal's minimum vote threshold
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_min_vote_threshold">get_min_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u128
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_min_vote_threshold">get_min_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u128
 </code></pre>
 
 
@@ -1354,7 +1361,8 @@ Return the proposal's minimum vote threshold
 Return the proposal's early resolution minimum vote threshold (optionally set)
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_early_resolution_vote_threshold">get_early_resolution_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_Option">option::Option</a>&lt;u128&gt;
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_early_resolution_vote_threshold">get_early_resolution_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_Option">option::Option</a>&lt;u128&gt;
 </code></pre>
 
 
@@ -1384,7 +1392,8 @@ Return the proposal's early resolution minimum vote threshold (optionally set)
 Return the proposal's current vote count (yes_votes, no_votes)
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_votes">get_votes</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): (u128, u128)
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_votes">get_votes</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): (u128, u128)
 </code></pre>
 
 
@@ -1414,7 +1423,8 @@ Return the proposal's current vote count (yes_votes, no_votes)
 Return true if the governance proposal has already been resolved.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_resolved">is_resolved</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_resolved">is_resolved</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
 </code></pre>
 
 
@@ -1444,7 +1454,8 @@ Return true if the governance proposal has already been resolved.
 Return true if the multi-step governance proposal is in execution.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_multi_step_proposal_in_execution">is_multi_step_proposal_in_execution</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_multi_step_proposal_in_execution">is_multi_step_proposal_in_execution</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
 </code></pre>
 
 
@@ -1557,7 +1568,8 @@ Return true if the voting period of the given proposal has already ended.
 
 
 
-<pre><code><b>requires</b> <a href="chain_status.md#0x1_chain_status_is_operating">chain_status::is_operating</a>();
+<pre><code><b>pragma</b> verify_duration_estimate = 120;
+<b>requires</b> <a href="chain_status.md#0x1_chain_status_is_operating">chain_status::is_operating</a>();
 <b>include</b> <a href="voting.md#0x1_voting_CreateProposalAbortsIf">CreateProposalAbortsIf</a>&lt;ProposalType&gt;;
 </code></pre>
 
@@ -1697,7 +1709,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `next_proposal_id`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_next_proposal_id">next_proposal_id</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_next_proposal_id">next_proposal_id</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>): u64
 </code></pre>
 
 
@@ -1713,7 +1726,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `is_voting_closed`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_voting_closed">is_voting_closed</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_voting_closed">is_voting_closed</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
 </code></pre>
 
 
@@ -1748,7 +1762,40 @@ Return true if the voting period of the given proposal has already ended.
 <pre><code><b>fun</b> <a href="voting.md#0x1_voting_spec_get_proposal_state">spec_get_proposal_state</a>&lt;ProposalType&gt;(
    voting_forum_address: <b>address</b>,
    proposal_id: u64,
-): u64;
+   voting_forum: <a href="voting.md#0x1_voting_VotingForum">VotingForum</a>&lt;ProposalType&gt;
+): u64 {
+   <b>let</b> proposal = <a href="../../aptos-stdlib/doc/table.md#0x1_table_spec_get">table::spec_get</a>(voting_forum.proposals, proposal_id);
+   <b>let</b> early_resolution_threshold = <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_spec_borrow">option::spec_borrow</a>(proposal.early_resolution_vote_threshold);
+   <b>let</b> voting_period_over = <a href="timestamp.md#0x1_timestamp_now_seconds">timestamp::now_seconds</a>() &gt; proposal.expiration_secs;
+   <b>let</b> be_resolved_early = <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_spec_is_some">option::spec_is_some</a>(proposal.early_resolution_vote_threshold) &&
+       (proposal.yes_votes &gt;= early_resolution_threshold ||
+           proposal.no_votes &gt;= early_resolution_threshold);
+   <b>let</b> voting_closed = voting_period_over || be_resolved_early;
+   <b>let</b> proposal_vote_cond = (proposal.yes_votes &gt; proposal.no_votes && proposal.yes_votes + proposal.no_votes &gt;= proposal.min_vote_threshold);
+   <b>if</b> (voting_closed && proposal_vote_cond) {
+       <a href="voting.md#0x1_voting_PROPOSAL_STATE_SUCCEEDED">PROPOSAL_STATE_SUCCEEDED</a>
+   } <b>else</b> <b>if</b> (voting_closed && !proposal_vote_cond) {
+       <a href="voting.md#0x1_voting_PROPOSAL_STATE_FAILED">PROPOSAL_STATE_FAILED</a>
+   } <b>else</b> {
+       <a href="voting.md#0x1_voting_PROPOSAL_STATE_PENDING">PROPOSAL_STATE_PENDING</a>
+   }
+}
+</code></pre>
+
+
+
+
+<a name="0x1_voting_spec_get_proposal_expiration_secs"></a>
+
+
+<pre><code><b>fun</b> <a href="voting.md#0x1_voting_spec_get_proposal_expiration_secs">spec_get_proposal_expiration_secs</a>&lt;ProposalType: store&gt;(
+   voting_forum_address: <b>address</b>,
+   proposal_id: u64,
+): u64 {
+   <b>let</b> voting_forum = <b>global</b>&lt;<a href="voting.md#0x1_voting_VotingForum">VotingForum</a>&lt;ProposalType&gt;&gt;(voting_forum_address);
+   <b>let</b> proposal = <a href="../../aptos-stdlib/doc/table.md#0x1_table_spec_get">table::spec_get</a>(voting_forum.proposals, proposal_id);
+   proposal.expiration_secs
+}
 </code></pre>
 
 
@@ -1758,7 +1805,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `get_proposal_state`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_state">get_proposal_state</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_state">get_proposal_state</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
 </code></pre>
 
 
@@ -1775,12 +1823,7 @@ Return true if the voting period of the given proposal has already ended.
                             (proposal.yes_votes &gt;= early_resolution_threshold ||
                              proposal.no_votes &gt;= early_resolution_threshold);
 <b>let</b> voting_closed = voting_period_over || be_resolved_early;
-<b>ensures</b> voting_closed ==&gt; <b>if</b> (proposal.yes_votes &gt; proposal.no_votes && proposal.yes_votes + proposal.no_votes &gt;= proposal.min_vote_threshold) {
-    result == <a href="voting.md#0x1_voting_PROPOSAL_STATE_SUCCEEDED">PROPOSAL_STATE_SUCCEEDED</a>
-} <b>else</b> {
-    result == <a href="voting.md#0x1_voting_PROPOSAL_STATE_FAILED">PROPOSAL_STATE_FAILED</a>
-};
-<b>ensures</b> !voting_closed ==&gt; result == <a href="voting.md#0x1_voting_PROPOSAL_STATE_PENDING">PROPOSAL_STATE_PENDING</a>;
+<b>ensures</b> result == <a href="voting.md#0x1_voting_spec_get_proposal_state">spec_get_proposal_state</a>(voting_forum_address, proposal_id, voting_forum);
 </code></pre>
 
 
@@ -1790,7 +1833,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `get_proposal_creation_secs`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_creation_secs">get_proposal_creation_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_creation_secs">get_proposal_creation_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
 </code></pre>
 
 
@@ -1806,7 +1850,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `get_proposal_expiration_secs`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_expiration_secs">get_proposal_expiration_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_proposal_expiration_secs">get_proposal_expiration_secs</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u64
 </code></pre>
 
 
@@ -1822,7 +1867,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `get_execution_hash`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_execution_hash">get_execution_hash</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_execution_hash">get_execution_hash</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -1838,7 +1884,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `get_min_vote_threshold`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_min_vote_threshold">get_min_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u128
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_min_vote_threshold">get_min_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): u128
 </code></pre>
 
 
@@ -1854,7 +1901,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `get_early_resolution_vote_threshold`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_early_resolution_vote_threshold">get_early_resolution_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_Option">option::Option</a>&lt;u128&gt;
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_early_resolution_vote_threshold">get_early_resolution_vote_threshold</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): <a href="../../aptos-stdlib/../move-stdlib/doc/option.md#0x1_option_Option">option::Option</a>&lt;u128&gt;
 </code></pre>
 
 
@@ -1870,7 +1918,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `get_votes`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_votes">get_votes</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): (u128, u128)
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_get_votes">get_votes</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): (u128, u128)
 </code></pre>
 
 
@@ -1886,7 +1935,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `is_resolved`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_resolved">is_resolved</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_resolved">is_resolved</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
 </code></pre>
 
 
@@ -1917,7 +1967,8 @@ Return true if the voting period of the given proposal has already ended.
 ### Function `is_multi_step_proposal_in_execution`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_multi_step_proposal_in_execution">is_multi_step_proposal_in_execution</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
+<pre><code>#[view]
+<b>public</b> <b>fun</b> <a href="voting.md#0x1_voting_is_multi_step_proposal_in_execution">is_multi_step_proposal_in_execution</a>&lt;ProposalType: store&gt;(voting_forum_address: <b>address</b>, proposal_id: u64): bool
 </code></pre>
 
 

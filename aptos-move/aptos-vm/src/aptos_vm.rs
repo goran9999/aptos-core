@@ -30,7 +30,7 @@ use aptos_state_view::StateView;
 use aptos_types::{
     account_config,
     account_config::new_block_event_key,
-    block_executor::partitioner::ExecutableTransactions,
+    block_executor::partitioner::{BlockExecutorTransactions, SubBlocksForShard},
     block_metadata::BlockMetadata,
     fee_statement::FeeStatement,
     on_chain_config::{new_epoch_event_key, FeatureFlag, TimedFeatureOverride},
@@ -1519,7 +1519,7 @@ impl VMExecutor for AptosVM {
         let count = transactions.len();
         let ret = BlockAptosVM::execute_block(
             Arc::clone(&RAYON_EXEC_POOL),
-            ExecutableTransactions::Unsharded(transactions),
+            BlockExecutorTransactions::Unsharded(transactions),
             state_view,
             Self::get_concurrency_level(),
             maybe_block_gas_limit,
@@ -1533,7 +1533,7 @@ impl VMExecutor for AptosVM {
 
     fn execute_block_sharded<S: StateView + Sync + Send + 'static>(
         sharded_block_executor: &ShardedBlockExecutor<S>,
-        transactions: Vec<Transaction>,
+        transactions: Vec<SubBlocksForShard<Transaction>>,
         state_view: Arc<S>,
         maybe_block_gas_limit: Option<u64>,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
@@ -1541,7 +1541,7 @@ impl VMExecutor for AptosVM {
         info!(
             log_context,
             "Executing block, transaction count: {}",
-            transactions.len()
+            transactions.iter().map(|s| s.num_txns()).sum::<usize>()
         );
 
         let count = transactions.len();
@@ -1695,15 +1695,60 @@ impl VMAdapter for AptosVM {
                 let (vm_status, output) = self.execute_user_transaction(resolver, txn, log_context);
 
                 if let StatusType::InvariantViolation = vm_status.status_type() {
-                    // Only log down the non-storage error case as storage error can be resulted from speculative execution.
-                    if vm_status.status_code() != StatusCode::STORAGE_ERROR {
-                        error!(
-                            *log_context,
-                            "[aptos_vm] Transaction breaking invariant violation. txn: {:?}, status: {:?}",
-                            bcs::to_bytes::<SignedTransaction>(&**txn),
-                            vm_status,
-                        );
-                        TRANSACTIONS_INVARIANT_VIOLATION.inc();
+                    match vm_status.status_code() {
+                        // Type resolution failure can be triggered by user input when providing a bad type argument, skip this case.
+                        StatusCode::TYPE_RESOLUTION_FAILURE
+                            if vm_status.sub_status()
+                                == Some(move_vm_types::errors::EUSER_TYPE_LOADING_FAILURE) => {},
+                        // The known Move function failure and type resolution failure could be a result of speculative execution. Use speculative logger.
+                        StatusCode::UNEXPECTED_ERROR_FROM_KNOWN_MOVE_FUNCTION
+                        | StatusCode::TYPE_RESOLUTION_FAILURE => {
+                            speculative_error!(
+                                log_context,
+                                format!(
+                                    "[aptos_vm] Transaction breaking invariant violation. txn: {:?}, status: {:?}",
+                                    bcs::to_bytes::<SignedTransaction>(&**txn),
+                                    vm_status
+                                ),
+                            );
+                        },
+                        // Paranoid mode failure. We need to be alerted about this ASAP.
+                        StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+                            if vm_status.sub_status()
+                                == Some(move_vm_types::errors::EPARANOID_FAILURE) =>
+                        {
+                            error!(
+                                *log_context,
+                                "[aptos_vm] Transaction breaking paranoid mode. txn: {:?}, status: {:?}",
+                                bcs::to_bytes::<SignedTransaction>(&**txn),
+                                vm_status,
+                            );
+                        },
+                        // Paranoid mode failure but with reference counting
+                        StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR
+                            if vm_status.sub_status()
+                                == Some(move_vm_types::errors::EREFERENCE_COUNTING_FAILURE) =>
+                        {
+                            error!(
+                                *log_context,
+                                "[aptos_vm] Transaction breaking paranoid mode. txn: {:?}, status: {:?}",
+                                bcs::to_bytes::<SignedTransaction>(&**txn),
+                                vm_status,
+                            );
+                        },
+                        // Ignore Storage Error as it can be intentionally triggered by parallel execution.
+                        StatusCode::STORAGE_ERROR => (),
+                        // We will log the rest of invariant violation directly with regular logger as they shouldn't happen.
+                        //
+                        // TODO: Add different counters for the error categories here.
+                        _ => {
+                            error!(
+                                *log_context,
+                                "[aptos_vm] Transaction breaking invariant violation. txn: {:?}, status: {:?}",
+                                bcs::to_bytes::<SignedTransaction>(&**txn),
+                                vm_status,
+                            );
+                        },
                     }
                 }
 

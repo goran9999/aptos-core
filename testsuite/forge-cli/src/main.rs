@@ -27,6 +27,7 @@ use aptos_testcases::{
     network_loss_test::NetworkLossTest,
     network_partition_test::NetworkPartitionTest,
     performance_test::PerformanceBenchmark,
+    public_fullnode_performance::PFNPerformance,
     quorum_store_onchain_enable_test::QuorumStoreOnChainEnableTest,
     reconfiguration_test::ReconfigurationTest,
     state_sync_performance::{
@@ -216,7 +217,6 @@ fn random_namespace<R: Rng>(dictionary: Vec<String>, rng: &mut R) -> Result<Stri
     // Pick four random words
     let random_words = dictionary
         .choose_multiple(rng, 4)
-        .into_iter()
         .cloned()
         .collect::<Vec<String>>();
     Ok(format!("forge-{}", random_words.join("-")))
@@ -539,6 +539,8 @@ fn single_test_suite(test_name: &str, duration: Duration) -> Result<ForgeConfig>
         "quorum_store_reconfig_enable_test" => quorum_store_reconfig_enable_test(),
         "mainnet_like_simulation_test" => mainnet_like_simulation_test(),
         "multiregion_benchmark_test" => multiregion_benchmark_test(),
+        "pfn_const_tps" => pfn_const_tps(duration),
+        "pfn_performance" => pfn_performance(duration),
         _ => return Err(format_err!("Invalid --suite given: {:?}", test_name)),
     };
     Ok(single_test_suite)
@@ -998,8 +1000,9 @@ fn realistic_env_graceful_overload() -> ForgeConfig {
                 .add_no_restarts()
                 .add_wait_for_catchup_s(120)
                 .add_system_metrics_threshold(SystemMetricsThreshold::new(
-                    // Check that we don't use more than 12 CPU cores for 30% of the time.
-                    MetricsThreshold::new(12, 40),
+                    // overload test uses more CPUs than others, so increase the limit
+                    // Check that we don't use more than 18 CPU cores for 30% of the time.
+                    MetricsThreshold::new(18, 40),
                     // Check that we don't use more than 5 GB of memory for 30% of the time.
                     MetricsThreshold::new(5 * 1024 * 1024 * 1024, 30),
                 ))
@@ -1533,7 +1536,7 @@ fn realistic_network_tuned_for_throughput_test() -> ForgeConfig {
                 ["dynamic_max_txn_per_s"] = 6000.into();
 
             // Experimental storage optimizations
-            helm_values["validator"]["config"]["storage"]["rocksdb_configs"]["use_state_kv_db"] =
+            helm_values["validator"]["config"]["storage"]["rocksdb_configs"]["split_ledger_db"] =
                 true.into();
             helm_values["validator"]["config"]["storage"]["rocksdb_configs"]
                 ["use_sharded_state_merkle_db"] = true.into();
@@ -1802,6 +1805,9 @@ fn mainnet_like_simulation_test() -> ForgeConfig {
         )
 }
 
+/// This test runs a network test in a real multi-region setup. It configures
+/// genesis and node helm values to enable certain configurations needed to run in
+/// the multiregion forge cluster.
 fn multiregion_benchmark_test() -> ForgeConfig {
     ForgeConfig::default()
         .with_initial_validator_count(NonZeroUsize::new(20).unwrap())
@@ -1834,6 +1840,59 @@ fn multiregion_benchmark_test() -> ForgeConfig {
                     // Check that we don't use more than 10 GB of memory for 30% of the time.
                     MetricsThreshold::new(10 * 1024 * 1024 * 1024, 30),
                 ))
+                .add_chain_progress(StateProgressThreshold {
+                    max_no_progress_secs: 10.0,
+                    max_round_gap: 4,
+                }),
+        )
+}
+
+/// This test runs a constant-TPS benchmark where the network includes
+/// PFNs, and the transactions are submitted to the PFNs. This is useful
+/// for measuring latencies when the system is not saturated.
+fn pfn_const_tps(duration: Duration) -> ForgeConfig {
+    ForgeConfig::default()
+        .with_initial_validator_count(NonZeroUsize::new(20).unwrap())
+        .with_initial_fullnode_count(10)
+        .with_emit_job(EmitJobRequest::default().mode(EmitJobMode::ConstTps { tps: 500 }))
+        .add_network_test(PFNPerformance)
+        .with_genesis_helm_config_fn(Arc::new(|helm_values| {
+            // Require frequent epoch changes
+            helm_values["chain"]["epoch_duration_secs"] = 300.into();
+        }))
+        .with_success_criteria(
+            SuccessCriteria::new(0)
+                .add_no_restarts()
+                .add_wait_for_catchup_s(
+                    // Give at least 60s for catchup and at most 10% of the run
+                    (duration.as_secs() / 10).max(60),
+                )
+                .add_chain_progress(StateProgressThreshold {
+                    max_no_progress_secs: 10.0,
+                    max_round_gap: 4,
+                }),
+        )
+}
+
+/// This test runs a performance benchmark where the network includes
+/// PFNs, and the transactions are submitted to the PFNs. This is useful
+/// for measuring maximum throughput and latencies.
+fn pfn_performance(duration: Duration) -> ForgeConfig {
+    ForgeConfig::default()
+        .with_initial_validator_count(NonZeroUsize::new(20).unwrap())
+        .with_initial_fullnode_count(10)
+        .add_network_test(PFNPerformance)
+        .with_genesis_helm_config_fn(Arc::new(|helm_values| {
+            // Require frequent epoch changes
+            helm_values["chain"]["epoch_duration_secs"] = 300.into();
+        }))
+        .with_success_criteria(
+            SuccessCriteria::new(4500)
+                .add_no_restarts()
+                .add_wait_for_catchup_s(
+                    // Give at least 60s for catchup and at most 10% of the run
+                    (duration.as_secs() / 10).max(60),
+                )
                 .add_chain_progress(StateProgressThreshold {
                     max_no_progress_secs: 10.0,
                     max_round_gap: 4,
@@ -1876,7 +1935,7 @@ impl Test for GetMetadata {
 }
 
 impl AdminTest for GetMetadata {
-    fn run<'t>(&self, ctx: &mut AdminContext<'t>) -> Result<()> {
+    fn run(&self, ctx: &mut AdminContext<'_>) -> Result<()> {
         let client = ctx.rest_client();
         let runtime = Runtime::new().unwrap();
         runtime.block_on(client.get_aptos_version()).unwrap();
@@ -1965,7 +2024,7 @@ impl Test for RestartValidator {
 }
 
 impl NetworkTest for RestartValidator {
-    fn run<'t>(&self, ctx: &mut NetworkContext<'t>) -> Result<()> {
+    fn run(&self, ctx: &mut NetworkContext<'_>) -> Result<()> {
         let runtime = Runtime::new()?;
         runtime.block_on(async {
             let node = ctx.swarm().validators_mut().next().unwrap();
@@ -1990,7 +2049,7 @@ impl Test for EmitTransaction {
 }
 
 impl NetworkTest for EmitTransaction {
-    fn run<'t>(&self, ctx: &mut NetworkContext<'t>) -> Result<()> {
+    fn run(&self, ctx: &mut NetworkContext<'_>) -> Result<()> {
         let duration = Duration::from_secs(10);
         let all_validators = ctx
             .swarm()
